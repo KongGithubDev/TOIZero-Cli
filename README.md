@@ -26,13 +26,20 @@ A professional CLI tool designed to automate the competitive programming workflo
 
 ### Using the `toi` command
 
-After setup, you can use the short `toi` command instead of `python toi.py`:
+Use the short `toi` command instead of `python toi.py`:
 
-**Windows Setup:**
+**Add to PATH (One-time setup):**
+1. Copy the path to this folder (e.g., `C:\Users\...\TOI-ZERO`)
+2. Add to your system PATH environment variable
+3. Restart your terminal
+
+Or just use from the project folder directly.
+
+### List All Tasks
+Show all available problems grouped by category (A1, A2, A3, etc.):
 ```bash
-setup_windows.bat
+toi list
 ```
-Then restart your terminal.
 
 ### 1. Fetch Task Data
 Download problem PDF and display task information (Type, Time limit, Memory limit, Compilation commands). Auto-opens PDF in your IDE:

@@ -139,6 +139,41 @@ def get_session():
     save_session(session)
     return session
 
+def list_tasks():
+    """List all available tasks from the platform."""
+    session = get_session()
+    if not session: return
+    
+    print(f"{Colors.CYAN}Fetching task list...{Colors.RESET}")
+    r = session.get(f"{BASE_URL}")
+    soup = BeautifulSoup(r.text, 'html.parser')
+    
+    # Find all task links in the sidebar
+    task_links = soup.find_all('a', href=re.compile(r'/tasks/'))
+    tasks = set()
+    for link in task_links:
+        match = re.search(r'/tasks/([A-Z]\d+-\d+)', link.get('href', ''))
+        if match:
+            tasks.add(match.group(1))
+    
+    if not tasks:
+        print(f"{Colors.YELLOW}No tasks found.{Colors.RESET}")
+        return
+    
+    # Group by category (A1, A2, A3, etc.)
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for task in sorted(tasks):
+        category = task.split('-')[0]
+        grouped[category].append(task)
+    
+    print(f"\n{Colors.BOLD}Available Tasks:{Colors.RESET}")
+    for category in sorted(grouped.keys()):
+        print(f"\n{Colors.CYAN}{category}:{Colors.RESET}")
+        for task in sorted(grouped[category]):
+            print(f"  {task}")
+        print(f"  Total: {len(grouped[category])} tasks")
+
 def pull_task(task_id):
     session = get_session()
     if not session: return
@@ -276,12 +311,14 @@ def open_pdf_in_ide(pdf_path):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if not args or len(args) < 2:
-        print("Usage: py toi.py [run|pull|submit|status] <task_id/file>")
+    if not args or (args[0] not in ['list'] and len(args) < 2):
+        print("Usage: py toi.py [list|run|pull|submit|status] <task_id/file>")
+        print("  list            - List all available tasks")
         print("  run <file>      - Run solution (Python/C/C++)")
         print("  pull <task_id>  - Fetch problem PDF and info")
         print("  submit <file>   - Submit solution to platform")
         print("  status <task_id> - Check submission status")
+    elif args[0] == "list": list_tasks()
     elif args[0] == "run":
         run_solution(args[1])
     elif args[0] == "pull":
