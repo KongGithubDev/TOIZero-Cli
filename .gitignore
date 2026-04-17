@@ -8,8 +8,9 @@
 tasks/
 
 # User solutions (optional - remove if you want to commit solutions)
-solutions/*.exe
-solutions/*.out
+solutions/**/*.exe
+solutions/**/*.out
+solutions/**/__pycache__
 
 # Network traffic capture
 network_taffic.json

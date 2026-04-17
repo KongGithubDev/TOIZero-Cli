@@ -399,9 +399,68 @@ def submit_task(task_folder, specific_file=None):
         else:
             print(f"{Colors.RED}Submission failed: HTTP {r.status_code}{Colors.RESET}")
 
+def show_submission_details(details_url, session):
+    """Fetch and display detailed submission info from details page."""
+    try:
+        r = session.get(details_url)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        
+        # Parse test cases
+        testcase_table = soup.find('table', class_='testcase-list')
+        if testcase_table:
+            print(f"\n{Colors.BOLD}Submission details{Colors.RESET}")
+            print(f"{'#':<4} {'Outcome':<12} Details")
+            print("-" * 40)
+            for row in testcase_table.find_all('tr')[1:]:  # Skip header
+                tds = row.find_all('td')
+                if len(tds) >= 3:
+                    idx = tds[0].text.strip()
+                    outcome = tds[1].text.strip()
+                    details = tds[2].text.strip()
+                    outcome_color = Colors.GREEN if outcome == "Correct" else Colors.RED if outcome in ["Wrong", "Failed"] else Colors.YELLOW
+                    print(f"{idx:<4} {outcome_color}{outcome:<12}{Colors.RESET} {details}")
+        
+        # Parse compilation output
+        comp_heading = soup.find('h3', string=lambda x: x and 'Compilation output' in x)
+        if comp_heading:
+            print(f"\n{Colors.BOLD}Compilation output{Colors.RESET}")
+            all_tables = comp_heading.find_all_next('table', class_='table')
+            for ti, comp_table in enumerate(all_tables[:1]):
+                # Handle malformed HTML where th/td may be outside tr
+                tbody = comp_table.find('tbody') or comp_table
+                all_ths = tbody.find_all('th')
+                for th in all_ths:
+                    # Find next sibling td (may not be in same tr)
+                    td = th.find_next_sibling('td')
+                    if td:
+                        label = th.text.strip()
+                        value = td.text.strip()
+                        print(f"{label} {value}")
+            
+            # Standard output
+            stdout_heading = comp_heading.find_next('h4', string=lambda x: x and 'Standard output' in x)
+            if stdout_heading:
+                pre = stdout_heading.find_next('pre')
+                stdout = pre.text.strip() if pre else ""
+                if stdout:
+                    print(f"\n{Colors.BOLD}Standard output{Colors.RESET}")
+                    print(stdout)
+            
+            # Standard error
+            stderr_heading = comp_heading.find_next('h4', string=lambda x: x and 'Standard error' in x)
+            if stderr_heading:
+                pre = stderr_heading.find_next('pre')
+                stderr = pre.text.strip() if pre else ""
+                if stderr:
+                    print(f"\n{Colors.BOLD}Standard error{Colors.RESET}")
+                    print(stderr)
+    except Exception as e:
+        pass  # Silently skip if details fetch fails
+
 def poll_status(task_id, sub_id, session):
     print("Waiting for results...", end="", flush=True)
     pending_statuses = ["Queued", "Compiling", "Running", "Evaluating"]
+    submission_id = None
     for _ in range(30):  # Increased to 60 seconds max wait
         time.sleep(2)
         print(".", end="", flush=True)
@@ -409,7 +468,8 @@ def poll_status(task_id, sub_id, session):
         soup = BeautifulSoup(r.text, 'html.parser')
         rows = soup.find_all('tr')
         if len(rows) > 1:
-            cols = rows[1].find_all('td')
+            first_row = rows[1]
+            cols = first_row.find_all('td')
             status = cols[1].text.strip()
             # Check if status starts with any pending status (handles "Compiling..." etc.)
             is_pending = any(status.startswith(s) for s in pending_statuses)
@@ -417,8 +477,44 @@ def poll_status(task_id, sub_id, session):
                 print(f"\nLast Submission: {cols[0].text.strip()}")
                 print(f"Status: {status.replace('details', '').strip()}")
                 print(f"{Colors.BOLD}Score: {cols[2].text.strip()}{Colors.RESET}")
-                return
-    print("\nStill processing. Check 'py toi.py status " + task_id + "' later.")
+                # Get submission ID from data-submission attribute
+                submission_id = first_row.get('data-submission')
+                break
+    else:
+        print("\nStill processing. Check 'py toi.py status " + task_id + "' later.")
+        return
+    
+    # Fetch and display detailed submission info
+    if submission_id:
+        details_url = f"{BASE_URL}/tasks/{task_id}/submissions/{submission_id}/details"
+        show_submission_details(details_url, session)
+
+def get_status_detailed(task_id, session):
+    """Get status with full details without waiting animation."""
+    r = session.get(f"{BASE_URL}/tasks/{task_id}/submissions")
+    soup = BeautifulSoup(r.text, 'html.parser')
+    rows = soup.find_all('tr')
+    if len(rows) > 1:
+        # Get submission ID from data-submission attribute
+        first_row = rows[1]
+        submission_id = first_row.get('data-submission')
+        
+        cols = first_row.find_all('td')
+        if len(cols) >= 3:
+            print(f"Last Submission: {cols[0].text.strip()}")
+            status = cols[1].text.strip()
+            print(f"Status: {status.replace('details', '').strip()}")
+            print(f"{Colors.BOLD}Score: {cols[2].text.strip()}{Colors.RESET}")
+            
+            if submission_id:
+                details_url = f"{BASE_URL}/tasks/{task_id}/submissions/{submission_id}/details"
+                show_submission_details(details_url, session)
+            else:
+                print("Debug: No submission ID found")
+        else:
+            print(f"{Colors.YELLOW}No submissions found for {task_id}{Colors.RESET}")
+    else:
+        print(f"{Colors.YELLOW}No submissions found for {task_id}{Colors.RESET}")
 
 def open_pdf_in_ide(pdf_path):
     """Open PDF file in the current IDE/editor."""
@@ -540,4 +636,4 @@ if __name__ == "__main__":
             submit_task(arg)
     elif args[0] == "status":
         s = get_session()
-        if s: poll_status(args[1], None, s)
+        if s: get_status_detailed(args[1], s)
