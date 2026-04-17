@@ -1,0 +1,39 @@
+# Credentials
+.env
+
+# Session cache
+.session
+
+# Downloaded task files
+tasks/
+
+# User solutions (optional - remove if you want to commit solutions)
+solutions/*.exe
+solutions/*.out
+
+# Network traffic capture
+network_taffic.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Compiled binaries
+*.exe
+*.out
+*.o
+*.obj
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

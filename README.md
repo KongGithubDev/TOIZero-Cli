@@ -1,0 +1,60 @@
+# TOI-ZERO Terminal Assistant
+
+A professional CLI tool designed to automate the competitive programming workflow for the TOI-ZERO platform.
+
+## Features
+
+- Unified Execution: Run Python, C, and C++ solutions with a single command.
+- Task Pulling: Download problem PDF and display task info (Type, Time/Memory limits, Compilation commands). Auto-opens PDF in IDE.
+- Automated Submission: Submit code and track evaluation status in real-time.
+- Status Polling: Check latest submission scores and platform status.
+
+## Installation
+
+1. Clone the repository into your local workspace.
+2. Install dependencies:
+   ```bash
+   py -m pip install requests beautifulsoup4 python-dotenv
+   ```
+3. Configure credentials: Create a `.env` file in the root directory:
+   ```env
+   TOI_USERNAME=your_username
+   TOI_PASSWORD=your_password
+   ```
+
+## Usage
+
+### 1. Fetch Task Data
+Download problem PDF and display task information (Type, Time limit, Memory limit, Compilation commands). Auto-opens PDF in your IDE:
+```bash
+py toi.py pull A1-001
+```
+
+### 2. Run Solution
+Execute your code with interactive manual input:
+```bash
+py toi.py run A1-001.py
+```
+
+### 3. Submit to Platform
+Submit your code and watch the live grading progress:
+```bash
+py toi.py submit A1-001.py
+```
+
+### 4. Check Grade Status
+Check the latest results for a specific task:
+```bash
+py toi.py status A1-001
+```
+
+## Project Structure
+
+- `toi.py`: The main CLI tool logic.
+- `solutions/`: Folder for your solution files (e.g., `A1-001.py`, `A1-002.cpp`).
+- `tasks/`: Directory containing downloaded problem PDFs.
+- `.env`: Secure storage for your credentials (ignored by git).
+- `.session`: Cached session cookies (auto-created, ignored by git).
+
+---
+Developed for TOI-ZERO Competitive Programming.
