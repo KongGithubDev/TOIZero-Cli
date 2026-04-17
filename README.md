@@ -38,7 +38,9 @@ Or just use from the project folder directly.
 ### List All Tasks
 Show all available problems grouped by category (A1, A2, A3, etc.):
 ```bash
-toi list
+toi list        # Show all categories
+toi list A1     # Show only A1 tasks
+toi list A2     # Show only A2 tasks
 ```
 
 ### 1. Fetch Task Data

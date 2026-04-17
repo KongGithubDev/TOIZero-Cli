@@ -40,7 +40,12 @@ def run_solution(filename):
     try:
         if ext == 'py':
             cmd = ['python', filename]
-            return subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
+            print(f"{Colors.CYAN}Running Python program...{Colors.RESET}")
+            try:
+                subprocess.run(cmd, capture_output=False, text=True)
+            except KeyboardInterrupt:
+                print(f"\n{Colors.YELLOW}Program interrupted.{Colors.RESET}")
+            return None  # Already executed
         elif ext in ['c', 'cpp']:
             # Create exe in temp location
             import tempfile
@@ -60,7 +65,10 @@ def run_solution(filename):
             
             # Run with input/output connected to console
             print(f"{Colors.CYAN}Running compiled program...{Colors.RESET}")
-            result = subprocess.run([out_file], capture_output=False, text=True)
+            try:
+                subprocess.run([out_file], capture_output=False, text=True)
+            except KeyboardInterrupt:
+                print(f"\n{Colors.YELLOW}Program interrupted.{Colors.RESET}")
             # Cleanup exe file
             if os.path.exists(out_file):
                 try:
@@ -139,8 +147,8 @@ def get_session():
     save_session(session)
     return session
 
-def list_tasks():
-    """List all available tasks from the platform."""
+def list_tasks(category_filter=None):
+    """List all available tasks from the platform with user's progress."""
     session = get_session()
     if not session: return
     
@@ -160,6 +168,27 @@ def list_tasks():
         print(f"{Colors.YELLOW}No tasks found.{Colors.RESET}")
         return
     
+    # Get user's submissions for each task
+    print(f"{Colors.CYAN}Fetching submissions...{Colors.RESET}")
+    task_scores = {}
+    for task in tasks:
+        try:
+            r = session.get(f"{BASE_URL}/tasks/{task}/submissions")
+            soup_sub = BeautifulSoup(r.text, 'html.parser')
+            rows = soup_sub.find_all('tr')
+            if len(rows) > 1:
+                cols = rows[1].find_all('td')
+                if len(cols) >= 3:
+                    score_text = cols[2].text.strip()
+                    # Extract score from text like "100 / 100" or "0 / 100"
+                    score_match = re.search(r'(\d+)\s*/\s*\d+', score_text)
+                    if score_match:
+                        task_scores[task] = int(score_match.group(1))
+                    else:
+                        task_scores[task] = None  # No score yet
+        except:
+            pass
+    
     # Group by category (A1, A2, A3, etc.)
     from collections import defaultdict
     grouped = defaultdict(list)
@@ -167,12 +196,30 @@ def list_tasks():
         category = task.split('-')[0]
         grouped[category].append(task)
     
+    # Filter by category if specified
+    categories_to_show = [category_filter] if category_filter else sorted(grouped.keys())
+    
     print(f"\n{Colors.BOLD}Available Tasks:{Colors.RESET}")
-    for category in sorted(grouped.keys()):
+    total_tasks = len(tasks)
+    completed_tasks = sum(1 for score in task_scores.values() if score == 100)
+    
+    for category in categories_to_show:
+        if category not in grouped:
+            continue
         print(f"\n{Colors.CYAN}{category}:{Colors.RESET}")
         for task in sorted(grouped[category]):
-            print(f"  {task}")
-        print(f"  Total: {len(grouped[category])} tasks")
+            score = task_scores.get(task)
+            if score == 100:
+                print(f"  {Colors.GREEN}✓ {task} [{score}/100]{Colors.RESET}")
+            elif score is not None:
+                print(f"  {Colors.YELLOW}✗ {task} [{score}/100]{Colors.RESET}")
+            else:
+                print(f"  {task}")
+        cat_completed = sum(1 for t in grouped[category] if task_scores.get(t) == 100)
+        print(f"  {Colors.BOLD}Progress: {cat_completed}/{len(grouped[category])} completed{Colors.RESET}")
+    
+    if not category_filter:
+        print(f"\n{Colors.BOLD}Total Progress: {completed_tasks}/{total_tasks} tasks completed ({completed_tasks*100//total_tasks}%){Colors.RESET}")
 
 def pull_task(task_id):
     session = get_session()
@@ -313,12 +360,14 @@ if __name__ == "__main__":
     args = sys.argv[1:]
     if not args or (args[0] not in ['list'] and len(args) < 2):
         print("Usage: py toi.py [list|run|pull|submit|status] <task_id/file>")
-        print("  list            - List all available tasks")
+        print("  list [category] - List all available tasks (e.g., list A1)")
         print("  run <file>      - Run solution (Python/C/C++)")
         print("  pull <task_id>  - Fetch problem PDF and info")
         print("  submit <file>   - Submit solution to platform")
         print("  status <task_id> - Check submission status")
-    elif args[0] == "list": list_tasks()
+    elif args[0] == "list":
+        category = args[1] if len(args) > 1 else None
+        list_tasks(category)
     elif args[0] == "run":
         run_solution(args[1])
     elif args[0] == "pull":
