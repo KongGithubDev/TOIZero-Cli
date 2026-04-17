@@ -24,28 +24,38 @@ A professional CLI tool designed to automate the competitive programming workflo
 
 ## Usage
 
+### Using the `toi` command
+
+After setup, you can use the short `toi` command instead of `python toi.py`:
+
+**Windows Setup:**
+```bash
+setup_windows.bat
+```
+Then restart your terminal.
+
 ### 1. Fetch Task Data
 Download problem PDF and display task information (Type, Time limit, Memory limit, Compilation commands). Auto-opens PDF in your IDE:
 ```bash
-py toi.py pull A1-001
+toi pull A1-001
 ```
 
 ### 2. Run Solution
 Execute your code with interactive manual input:
 ```bash
-py toi.py run A1-001.py
+toi run A1-001.py
 ```
 
 ### 3. Submit to Platform
 Submit your code and watch the live grading progress:
 ```bash
-py toi.py submit A1-001.py
+toi submit A1-001.py
 ```
 
 ### 4. Check Grade Status
 Check the latest results for a specific task:
 ```bash
-py toi.py status A1-001
+toi status A1-001
 ```
 
 ## Project Structure
