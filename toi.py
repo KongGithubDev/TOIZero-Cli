@@ -197,7 +197,15 @@ def list_tasks(category_filter=None):
         grouped[category].append(task)
     
     # Filter by category if specified
-    categories_to_show = [category_filter] if category_filter else sorted(grouped.keys())
+    if category_filter:
+        if category_filter not in grouped:
+            print(f"\n{Colors.YELLOW}No tasks found in category '{category_filter}'.{Colors.RESET}")
+            available = ', '.join(sorted(grouped.keys())[:10]) + ('...' if len(grouped) > 10 else '')
+            print(f"Available categories: {available}")
+            return
+        categories_to_show = [category_filter]
+    else:
+        categories_to_show = sorted(grouped.keys())
     
     print(f"\n{Colors.BOLD}Available Tasks:{Colors.RESET}")
     total_tasks = len(tasks)
@@ -221,10 +229,62 @@ def list_tasks(category_filter=None):
     if not category_filter:
         print(f"\n{Colors.BOLD}Total Progress: {completed_tasks}/{total_tasks} tasks completed ({completed_tasks*100//total_tasks}%){Colors.RESET}")
 
-def pull_task(task_id):
+def start_task(task_id):
+    """Initialize task workspace: create folder, templates, and download PDF."""
     session = get_session()
     if not session: return
-    print(f"{Colors.CYAN}Fetching {task_id}...{Colors.RESET}")
+    print(f"{Colors.CYAN}Starting {task_id}...{Colors.RESET}")
+    
+    # Create solutions folder structure
+    task_folder = f"solutions/{task_id}"
+    os.makedirs(task_folder, exist_ok=True)
+    print(f"  Created folder: {task_folder}/")
+    
+    # Create template files
+    templates = {
+        "main.py": '''# Python solution for {}
+import sys
+
+def main():
+    # Read input
+    data = sys.stdin.read().split()
+    # Your code here
+    
+if __name__ == "__main__":
+    main()
+'''.format(task_id),
+        "main.c": '''// C solution for {}
+#include <stdio.h>
+
+int main() {{
+    // Read input
+    // Your code here
+    
+    return 0;
+}}
+'''.format(task_id),
+        "main.cpp": '''// C++ solution for {}
+#include <bits/stdc++.h>
+using namespace std;
+
+int main() {{
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+    
+    // Read input
+    // Your code here
+    
+    return 0;
+}}
+'''.format(task_id)
+    }
+    
+    for filename, content in templates.items():
+        filepath = f"{task_folder}/{filename}"
+        if not os.path.exists(filepath):
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(content)
+            print(f"  Created template: {filepath}")
     
     # Download PDF
     pdf_url = f"{BASE_URL}/tasks/{task_id}/attachments/{task_id}.pdf"
@@ -233,7 +293,7 @@ def pull_task(task_id):
         os.makedirs("tasks", exist_ok=True)
         path = f"tasks/{task_id}.pdf"
         with open(path, "wb") as f: f.write(r.content)
-        print(f"Downloaded PDF to {path}")
+        print(f"  Downloaded PDF to {path}")
     
     # Extract info from description page
     r = session.get(f"{BASE_URL}/tasks/{task_id}/description")
@@ -271,19 +331,54 @@ def pull_task(task_id):
                     cmd = tds[1].text.strip()[:60]
                     print(f"  {current_key} ({lang}): {cmd}...")
     
-def submit_task(filename):
-    if not os.path.exists(filename):
-        sol_path = os.path.join("solutions", filename)
-        if os.path.exists(sol_path):
-            filename = sol_path
+def submit_task(task_folder, specific_file=None):
+    """Submit solution from task folder. Folder name is the task_id."""
+    # Handle both folder path and direct file path (for backward compatibility)
+    if os.path.isfile(task_folder):
+        # Legacy mode: direct file submission
+        filename = task_folder
+        task_id = os.path.basename(filename).split('.')[0]
+    else:
+        # New mode: folder submission
+        # Normalize path
+        task_folder = task_folder.rstrip('/\\')
+        task_id = os.path.basename(task_folder)
+        
+        if specific_file:
+            # Specific file requested (e.g., submit A1-001 main.cpp)
+            filepath = os.path.join(task_folder, specific_file)
+            if os.path.exists(filepath):
+                filename = filepath
+                print(f"{Colors.CYAN}Submitting: {specific_file}{Colors.RESET}")
+            else:
+                print(f"{Colors.RED}Error: File {filepath} not found.{Colors.RESET}")
+                return
         else:
-            print(f"{Colors.RED}Error: File {filename} not found.{Colors.RESET}")
-            return
-    task_id = os.path.basename(filename).split('.')[0]
+            # Auto-find solution file in folder
+            solution_file = None
+            for ext in ['.py', '.cpp', '.c']:
+                for f in os.listdir(task_folder):
+                    if f.endswith(ext):
+                        solution_file = os.path.join(task_folder, f)
+                        break
+                if solution_file:
+                    break
+            
+            if not solution_file:
+                print(f"{Colors.RED}Error: No solution file (.py, .cpp, .c) found in {task_folder}/{Colors.RESET}")
+                return
+            
+            filename = solution_file
+            print(f"{Colors.CYAN}Found solution: {os.path.basename(filename)}{Colors.RESET}")
+    
+    if not os.path.exists(filename):
+        print(f"{Colors.RED}Error: File {filename} not found.{Colors.RESET}")
+        return
+    
     session = get_session()
     if not session: return
     
-    print(f"{Colors.CYAN}Submitting {filename}...{Colors.RESET}")
+    print(f"{Colors.CYAN}Submitting {task_id}...{Colors.RESET}")
     submit_url = f"{BASE_URL}/tasks/{task_id}/submit"
     r = session.get(f"{BASE_URL}/tasks/{task_id}/submissions")
     soup = BeautifulSoup(r.text, 'html.parser')
@@ -320,7 +415,7 @@ def poll_status(task_id, sub_id, session):
             is_pending = any(status.startswith(s) for s in pending_statuses)
             if not is_pending:
                 print(f"\nLast Submission: {cols[0].text.strip()}")
-                print(f"Status: {status}")
+                print(f"Status: {status.replace('details', '').strip()}")
                 print(f"{Colors.BOLD}Score: {cols[2].text.strip()}{Colors.RESET}")
                 return
     print("\nStill processing. Check 'py toi.py status " + task_id + "' later.")
@@ -359,23 +454,90 @@ def open_pdf_in_ide(pdf_path):
 if __name__ == "__main__":
     args = sys.argv[1:]
     if not args or (args[0] not in ['list'] and len(args) < 2):
-        print("Usage: py toi.py [list|run|pull|submit|status] <task_id/file>")
+        print("Usage: py toi.py [list|run|start|submit|status] <task_id/file>")
         print("  list [category] - List all available tasks (e.g., list A1)")
-        print("  run <file>      - Run solution (Python/C/C++)")
-        print("  pull <task_id>  - Fetch problem PDF and info")
-        print("  submit <file>   - Submit solution to platform")
+        print("  run <path>      - Run solution file (e.g., run solutions/A1-001/main.cpp)")
+        print("  run <task> <file> - Run from folder (e.g., run A1-001 main.cpp)")
+        print("  run <task> <ext>- Run by extension (e.g., run A1-001 cpp/py/c)")
+        print("  start <task_id> - Create task folder, templates, and download PDF")
+        print("  submit <folder> - Submit from folder (auto-find file)")
+        print("  submit <task> <file> - Submit specific file (e.g., submit A1-001 main.cpp)")
         print("  status <task_id> - Check submission status")
     elif args[0] == "list":
         category = args[1] if len(args) > 1 else None
         list_tasks(category)
     elif args[0] == "run":
-        run_solution(args[1])
-    elif args[0] == "pull":
-        pull_task(args[1])
+        # Support multiple formats:
+        #   run solutions/A1-001/main.cpp
+        #   run A1-001 main.cpp
+        #   run A1-001 cpp (find first .cpp file)
+        arg = args[1]
+        if len(args) >= 3:
+            # Format: run A1-001 main.cpp  or  run A1-001 cpp
+            task_id = arg
+            file_arg = args[2]
+            task_folder = f"solutions/{task_id}"
+            
+            if not os.path.exists(task_folder):
+                print(f"{Colors.RED}Error: Folder {task_folder} not found. Run: toi start {task_id}{Colors.RESET}")
+            elif not file_arg.startswith('main.'):
+                # Format: run A1-001 cpp  (find by extension)
+                ext = file_arg if file_arg.startswith('.') else '.' + file_arg
+                found = False
+                for f in os.listdir(task_folder):
+                    if f.endswith(ext):
+                        run_solution(os.path.join(task_folder, f))
+                        found = True
+                        break
+                if not found:
+                    print(f"{Colors.RED}Error: No *{ext} file found in {task_folder}/{Colors.RESET}")
+            else:
+                # Format: run A1-001 main.cpp
+                filepath = os.path.join(task_folder, file_arg)
+                if os.path.exists(filepath):
+                    run_solution(filepath)
+                else:
+                    print(f"{Colors.RED}Error: File {filepath} not found.{Colors.RESET}")
+        else:
+            # Format: run solutions/A1-001/main.cpp  or  run A1-001.cpp
+            run_solution(arg)
+    elif args[0] == "start":
+        start_task(args[1])
         pdf_path = f"tasks/{args[1]}.pdf"
         if os.path.exists(pdf_path):
             open_pdf_in_ide(pdf_path)
-    elif args[0] == "submit": submit_task(args[1])
+    elif args[0] == "submit":
+        # Support multiple formats:
+        #   submit solutions/A1-001  (auto-find file)
+        #   submit A1-001 main.cpp   (specific file)
+        #   submit A1-001 cpp        (find by extension)
+        if len(args) >= 3:
+            task_id = args[1]
+            file_arg = args[2]
+            task_folder = f"solutions/{task_id}"
+            
+            if not file_arg.startswith('main.') and not file_arg.startswith('.'):
+                # Format: submit A1-001 cpp (find by extension)
+                ext = '.' + file_arg
+                found_file = None
+                if os.path.exists(task_folder):
+                    for f in os.listdir(task_folder):
+                        if f.endswith(ext):
+                            found_file = f
+                            break
+                if found_file:
+                    submit_task(task_folder, found_file)
+                else:
+                    print(f"{Colors.RED}Error: No *{ext} file found in {task_folder}/{Colors.RESET}")
+            else:
+                # Format: submit A1-001 main.cpp
+                submit_task(task_folder, file_arg)
+        else:
+            # Format: submit solutions/A1-001  or  submit A1-001
+            arg = args[1]
+            if not arg.startswith('solutions/'):
+                arg = f"solutions/{arg}"
+            submit_task(arg)
     elif args[0] == "status":
         s = get_session()
         if s: poll_status(args[1], None, s)
