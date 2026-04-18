@@ -148,51 +148,51 @@ def get_session():
     return session
 
 def list_tasks(category_filter=None):
-    """List all available tasks from the platform with user's progress."""
+    """List all available tasks from the main page table with scores and titles."""
     session = get_session()
     if not session: return
     
-    print(f"{Colors.CYAN}Fetching task list...{Colors.RESET}")
+    print(f"{Colors.CYAN}Fetching task list from {BASE_URL}...{Colors.RESET}")
     r = session.get(f"{BASE_URL}")
     soup = BeautifulSoup(r.text, 'html.parser')
     
-    # Find all task links in the sidebar
-    task_links = soup.find_all('a', href=re.compile(r'/tasks/'))
-    tasks = set()
-    for link in task_links:
-        match = re.search(r'/tasks/([A-Z]\d+-\d+)', link.get('href', ''))
-        if match:
-            tasks.add(match.group(1))
+    # Parse task table for IDs, titles, and scores from main page (single request)
+    task_info = {}  # task_id -> {title, time, memory, score}
+    table = soup.find('table', class_='table')
+    if table:
+        for row in table.find_all('tr')[1:]:  # Skip header
+            tds = row.find_all('td')
+            th = row.find('th')
+            if th and len(tds) >= 5:
+                task_id = th.text.strip()
+                if re.match(r'[A-Z]\d+-\d+', task_id):
+                    # Score is in first td (e.g., "0 / 100" or "100 / 100")
+                    score_text = tds[0].text.strip() if len(tds) > 0 else ''
+                    score_match = re.search(r'(\d+)\s*/\s*\d+', score_text)
+                    score = int(score_match.group(1)) if score_match else None
+                    
+                    # Title is in 3rd td (index 2)
+                    title = tds[2].text.strip() if len(tds) > 2 else ''
+                    # Time limit is in 4th td (index 3)
+                    time_limit = tds[3].text.strip() if len(tds) > 3 else ''
+                    # Memory limit is in 5th td (index 4)
+                    memory_limit = tds[4].text.strip() if len(tds) > 4 else ''
+                    
+                    task_info[task_id] = {
+                        'title': title,
+                        'time': time_limit,
+                        'memory': memory_limit,
+                        'score': score
+                    }
     
-    if not tasks:
+    if not task_info:
         print(f"{Colors.YELLOW}No tasks found.{Colors.RESET}")
         return
-    
-    # Get user's submissions for each task
-    print(f"{Colors.CYAN}Fetching submissions...{Colors.RESET}")
-    task_scores = {}
-    for task in tasks:
-        try:
-            r = session.get(f"{BASE_URL}/tasks/{task}/submissions")
-            soup_sub = BeautifulSoup(r.text, 'html.parser')
-            rows = soup_sub.find_all('tr')
-            if len(rows) > 1:
-                cols = rows[1].find_all('td')
-                if len(cols) >= 3:
-                    score_text = cols[2].text.strip()
-                    # Extract score from text like "100 / 100" or "0 / 100"
-                    score_match = re.search(r'(\d+)\s*/\s*\d+', score_text)
-                    if score_match:
-                        task_scores[task] = int(score_match.group(1))
-                    else:
-                        task_scores[task] = None  # No score yet
-        except:
-            pass
     
     # Group by category (A1, A2, A3, etc.)
     from collections import defaultdict
     grouped = defaultdict(list)
-    for task in sorted(tasks):
+    for task in sorted(task_info.keys()):
         category = task.split('-')[0]
         grouped[category].append(task)
     
@@ -208,23 +208,32 @@ def list_tasks(category_filter=None):
         categories_to_show = sorted(grouped.keys())
     
     print(f"\n{Colors.BOLD}Available Tasks:{Colors.RESET}")
-    total_tasks = len(tasks)
-    completed_tasks = sum(1 for score in task_scores.values() if score == 100)
+    total_tasks = len(task_info)
+    completed_tasks = sum(1 for info in task_info.values() if info.get('score') == 100)
     
     for category in categories_to_show:
         if category not in grouped:
             continue
         print(f"\n{Colors.CYAN}{category}:{Colors.RESET}")
         for task in sorted(grouped[category]):
-            score = task_scores.get(task)
+            info = task_info.get(task, {})
+            title = info.get('title', '')
+            score = info.get('score')
+            title_display = f" - {title}" if title else ''
+            
             if score == 100:
-                print(f"  {Colors.GREEN}✓ {task} [{score}/100]{Colors.RESET}")
-            elif score is not None:
-                print(f"  {Colors.YELLOW}✗ {task} [{score}/100]{Colors.RESET}")
+                print(f"  {Colors.GREEN}✓ {task}{title_display} [{score}/100]{Colors.RESET}")
+            elif score is not None and score > 0:
+                print(f"  {Colors.YELLOW}◐ {task}{title_display} [{score}/100]{Colors.RESET}")
             else:
-                print(f"  {task}")
-        cat_completed = sum(1 for t in grouped[category] if task_scores.get(t) == 100)
-        print(f"  {Colors.BOLD}Progress: {cat_completed}/{len(grouped[category])} completed{Colors.RESET}")
+                # Unfinished (0 or None) - show in white without score
+                print(f"  {task}{title_display}")
+        cat_completed = sum(1 for t in grouped[category] if task_info.get(t, {}).get('score') == 100)
+        cat_partial = sum(1 for t in grouped[category] if (task_info.get(t, {}).get('score') or 0) > 0 and task_info.get(t, {}).get('score') != 100)
+        progress_text = f"{cat_completed}/{len(grouped[category])} completed"
+        if cat_partial > 0:
+            progress_text += f" ({cat_partial} partial)"
+        print(f"  {Colors.BOLD}Progress: {progress_text}{Colors.RESET}")
     
     if not category_filter:
         print(f"\n{Colors.BOLD}Total Progress: {completed_tasks}/{total_tasks} tasks completed ({completed_tasks*100//total_tasks}%){Colors.RESET}")
