@@ -49,9 +49,18 @@ def run_solution(filename):
         elif ext in ['c', 'cpp']:
             # Create exe in temp location
             import tempfile
+            import shutil
             temp_dir = tempfile.gettempdir()
             out_file = os.path.join(temp_dir, name + '.exe' if os.name == 'nt' else name + '.out')
             compiler = 'gcc' if ext == 'c' else 'g++'
+            
+            # Check if compiler is available
+            if not shutil.which(compiler):
+                print(f"{Colors.RED}Error: Compiler '{compiler}' not found in PATH.{Colors.RESET}")
+                print(f"{Colors.YELLOW}Please install MinGW-w64 or add g++/gcc to your system PATH.{Colors.RESET}")
+                print(f"{Colors.YELLOW}Download: https://www.mingw-w64.org/downloads/{Colors.RESET}")
+                return "NO_COMPILER"
+            
             compile_cmd = [compiler, filename, '-o', out_file]
             
             # Add UTF-8 support for g++
