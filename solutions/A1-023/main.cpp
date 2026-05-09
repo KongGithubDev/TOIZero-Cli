@@ -10,11 +10,13 @@ int main() {
     char c;
     cin >> n >> c;
     c = toupper(c);
-    if((c == 'F' && n > 32) || (c == 'C' && n == 0)) {
+    if(c == 'F') n = (n - 32) / 1.8;
+
+    if(n <= 0) {
         cout << "solid";
-    } else if((c == 'F' && n >= 212) || (c == 'C' && n >= 100)) {
+    } else if(n >= 100) {
         cout << "gas";
-    } else if((c == 'F' && n >= 32) || (c == 'C' && n > 0)) {
+    } else if(n > 0) {
         cout << "liquid";
     }
     return 0;

@@ -6,6 +6,7 @@
 
 # Downloaded task files
 tasks/
+solutions/
 
 # User solutions (optional - remove if you want to commit solutions)
 solutions/**/*.exe

@@ -304,14 +304,28 @@ int main() {{
                 f.write(content)
             print(f"  Created template: {filepath}")
     
-    # Download PDF
-    pdf_url = f"{BASE_URL}/tasks/{task_id}/attachments/{task_id}.pdf"
-    r = session.get(pdf_url)
-    if r.status_code == 200:
-        os.makedirs("tasks", exist_ok=True)
-        path = f"tasks/{task_id}.pdf"
-        with open(path, "wb") as f: f.write(r.content)
-        print(f"  Downloaded PDF to {path}")
+    # Download PDF - try multiple URL patterns
+    pdf_patterns = [
+        f"{BASE_URL}/tasks/{task_id}/attachments/{task_id}.pdf",  # Original pattern
+        f"{BASE_URL}/tasks/{task_id}/attachments/{task_id.replace('-', '_')}_R1.pdf",  # New pattern with _R1
+    ]
+
+    pdf_downloaded = False
+    for pdf_url in pdf_patterns:
+        print(f"  Fetching PDF from: {pdf_url}")
+        r = session.get(pdf_url)
+        if r.status_code == 200 and r.content.startswith(b'%PDF'):
+            os.makedirs("tasks", exist_ok=True)
+            path = f"tasks/{task_id}.pdf"
+            with open(path, "wb") as f: f.write(r.content)
+            print(f"  Downloaded PDF to {path}")
+            pdf_downloaded = True
+            break
+        else:
+            print(f"  {Colors.YELLOW}Not found or not a PDF (HTTP {r.status_code}){Colors.RESET}")
+
+    if not pdf_downloaded:
+        print(f"  {Colors.YELLOW}PDF not available for {task_id}{Colors.RESET}")
     
     # Extract info from description page
     r = session.get(f"{BASE_URL}/tasks/{task_id}/description")
