@@ -307,8 +307,11 @@ int main() {{
     # Download PDF - try multiple URL patterns
     pdf_patterns = [
         f"{BASE_URL}/tasks/{task_id}/attachments/{task_id}.pdf",  # Original pattern
-        f"{BASE_URL}/tasks/{task_id}/attachments/{task_id.replace('-', '_')}_R1.pdf",  # New pattern with _R1
     ]
+    # Add _R1 to _R10 patterns
+    base_name = task_id.replace('-', '_')
+    for i in range(1, 11):
+        pdf_patterns.append(f"{BASE_URL}/tasks/{task_id}/attachments/{base_name}_R{i}.pdf")
 
     pdf_downloaded = False
     for pdf_url in pdf_patterns:
@@ -631,9 +634,6 @@ if __name__ == "__main__":
             run_solution(arg)
     elif args[0] == "start":
         start_task(args[1])
-        pdf_path = f"tasks/{args[1]}.pdf"
-        if os.path.exists(pdf_path):
-            open_pdf_in_ide(pdf_path)
     elif args[0] == "submit":
         # Support multiple formats:
         #   submit solutions/A1-001  (auto-find file)
